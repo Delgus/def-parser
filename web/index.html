@@ -63,6 +63,7 @@
                         if (error(req)) {
                             return
                         }
+                        var srcs = [];
                         $('form').hide();
                         for (site of req.sites) {
                             spinner = "";
@@ -76,14 +77,15 @@
                                 </tr>`)
                             colorForTR(site.host, site.safe);
                             if (site.status == "progress") {
-                                let eventSource = new EventSource(`/events?stream=${site.host}`);
-                                eventSource.onmessage = function (event) {
+                                eventSource = new EventSource(`/events?stream=${site.host}`);
+                                srcs.push(eventSource);
+                                srcs[srcs.length - 1].onmessage = function (event) {
                                     o = JSON.parse(event.data);
                                     colorForTR(o.host, o.safe);
-                                    $(document.getElementById(`#${site.host}-host`)).html(o.host);
-                                    $(document.getElementById(`#${site.host}-safe`)).html(o.safe);
-                                    $(document.getElementById(`#${site.host}-categories`)).html(o.categories.join(','));
-                                }
+                                    $(document.getElementById(`#${o.host}-host`)).html(o.host);
+                                    $(document.getElementById(`#${o.host}-safe`)).html(o.safe);
+                                    $(document.getElementById(`#${o.host}-categories`)).html(o.categories.join(','));
+                                };
                             }
                         }
                         $('#results').show();
