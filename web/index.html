@@ -11,24 +11,91 @@
 <body>
     <div class="container">
         <h1> Информация о безопасности сайтов </h1>
-        <form action="/api" method="POST">
+        <form>
             <div class="form-group">
                 <label>Введите URL:</label>
                 <textarea name="urls" class="form-control" required rows="20"></textarea>
             </div>
-
             <button type="submit" class="btn btn-info"> Получить инфо </button>
         </form>
+        <div id="results" style="display:none">
+            <h2> Результаты </h2>
+            <a class="btn btn-success" href="/"> На главную </a>
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th scope="col"> Хост </th>
+                        <th scope="col"> Безопасность сайта </th>
+                        <th scope="col"> Категории </th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
     </div>
-    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
-        integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
-        crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
         integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
         crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
         integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
         crossorigin="anonymous"></script>
+    <script>
+        $(function () {
+            $('form').submit(function (e) {
+                e.preventDefault();
+                var $form = $(this);
+                $.ajax({
+                    type: "POST",
+                    url: "/api",
+                    data: $form.serialize()
+                }).done(function (req) {
+                    console.log(req)
+                    if (req.error) {
+                        alert(req.message);
+                        return
+                    }
+                    $.ajax({
+                        type: "POST",
+                        url: "/result",
+                        data: { statement_id: req.statement_id },
+                    }).done(function (req) {
+                        if (req.error) {
+                            alert(req.message);
+                            return
+                        }
+                        $('form').hide();
+                        for (site of req.sites) {
+                            color = "table-active";
+                            spinner = "";
+                            if (site.status == "progress") {
+                                spinner = '<div class="spinner-border text-warning" role="status"><span class="sr-only">Loading...</span></div>'
+                            }
+                            $("tbody").append(`<tr class="${color}">
+                                <td> ${spinner} ${site.host} </td>
+                                <td> ${site.safe} </td>
+                                <td> ${site.categories.join(',')} </td>
+                                </tr>`)
+                            if (site.status == "progress") {
+                                let eventSource = new EventSource(`/events?stream=${site.host}`);
+                                eventSource.onmessage = function (event) {
+                                    console.log("Новое сообщение", event.data);
+                                }
+                            }
+                        }
+                        $('#results').show();
+                        console.log(req);
+                    }).fail(function () {
+                        console.log('fail');
+                    });
+                }).fail(function () {
+                    console.log('fail');
+                });
+            });
+        });
+    </script>
 </body>
 
 </html>

@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"fmt"
+	"encoding/json"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
@@ -9,66 +9,117 @@ import (
 
 // API реализует взаимодействие клиента и сервиса
 type API struct {
-	store     StoreInterface
 	validator *validator
-	worker    *worker
+	service   *Service
 }
+
+// ErrorResponse структура для формирования json о ошибке
+type ErrorResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// Site хранит информацию о сайте
+type Site struct {
+	Host       string   `json:"host"`
+	Status     status   `json:"status"`
+	Safe       string   `json:"safe"`       // Безопасность сайта
+	Categories []string `json:"categories"` // Категории
+}
+
+type status string
+
+const (
+	progress status = "progress"
+	complete status = "complete"
+)
 
 // NewAPI конструктор нового API
-func NewAPI(store StoreInterface) *API {
-	api := &API{
-		store:     store,
+func NewAPI(service *Service) *API {
+	return &API{
 		validator: newValidator(),
-		worker:    newWorker(store),
+		service:   service,
 	}
-	go api.worker.run()
-	return api
 }
 
-// Start обрабатывает поступившую заявку
+// Start обрабатывает поступившую заявку и возвращает ее ID
 func (a *API) Start(w http.ResponseWriter, r *http.Request) {
 	// id заявки
-	id, err := a.store.GetNewID()
+	id, err := a.service.getStatementID()
 	if err != nil {
-		logrus.Error("failed get new id for request for client")
-		http.Redirect(w, r, `/`, http.StatusTemporaryRedirect)
+		logrus.WithError(err).Error("failed get new id for statement")
+		writeResponse(w, ErrorResponse{
+			Error:   "internal",
+			Message: "internal error",
+		})
 		return
 	}
 
 	// парсим полученные названия доменов
+	urls := r.FormValue("urls")
 	domains, err := a.validator.parseDomain(r.FormValue("urls"))
 	if err != nil {
-		logrus.Errorf("failed parse domains from client: %v", err)
-		http.Redirect(w, r, `/`, http.StatusTemporaryRedirect)
+		logrus.WithError(err).Errorf("failed parse domains from client. dirty data: %v", urls)
+		writeResponse(w, ErrorResponse{
+			Error:   "bad request",
+			Message: "bad urls",
+		})
 		return
 	}
 
-	// сохраняем заявку в хранилище
-	if err := a.store.SaveStatement(id, domains); err != nil {
-		logrus.Error("failed save statement for client")
-		http.Redirect(w, r, `/`, http.StatusTemporaryRedirect)
+	// сохраняем заявку
+	if err := a.service.addStatement(id, domains); err != nil {
+		logrus.WithError(err).Errorf("failed save statement id: %d urls: %v", id, urls)
+		writeResponse(w, ErrorResponse{
+			Error:   "internal",
+			Message: "failed save statement",
+		})
 		return
 	}
 
-	// перенаправляем клиента на страницу с результатами
-	redirectRoute := fmt.Sprintf(`/result?id=%d`, id)
-	http.Redirect(w, r, redirectRoute, http.StatusTemporaryRedirect)
+	writeResponse(w, struct {
+		StatemenID int64 `json:"statement_id"`
+	}{StatemenID: id})
 }
 
-// Result сообшает клиенту о результатах заявки
-func (a *API) Result(w http.ResponseWriter, r *http.Request) {
+// Sites возвращает список сайтов со статусом обработки и информацией если она есть
+func (a *API) Sites(w http.ResponseWriter, r *http.Request) {
 	// получаем id заявки
-	id, err := a.validator.parseID(r.FormValue("id"))
+	id, err := a.validator.parseID(r.FormValue("statement_id"))
 	if err != nil {
-		logrus.Errorf(`incorrect int64 id: %v`, err)
-		http.Redirect(w, r, `/`, http.StatusTemporaryRedirect)
+		logrus.WithError(err).Errorf(`incorrect int64 statement_id %v`, id)
+		writeResponse(w, ErrorResponse{
+			Error:   "bad request",
+			Message: "bad statement_id",
+		})
 		return
 	}
 
-	// получаем заявку из хранилища
-	urls, err := a.store.GetStatement(id)
+	// получаем все сайты заявки
+	sites, err := a.service.getSites(id)
 	if err != nil {
-		logrus.Errorf(`can not get statement from store`)
+		logrus.WithError(err).Errorf(`can not get sites for statement id %d`, id)
+		writeResponse(w, ErrorResponse{
+			Error:   "internal error",
+			Message: "can not get sites for statement",
+		})
+		return
 	}
-	fmt.Fprintln(w, urls)
+
+	writeResponse(w, struct {
+		Sites []*Site `json:"sites"`
+	}{Sites: sites})
+}
+
+func writeResponse(w http.ResponseWriter, resp interface{}) {
+	bytes, err := json.Marshal(resp)
+	if err != nil {
+		logrus.WithError(err).Errorf("failed to marshal response structure: %v", resp)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(bytes)
+	if err != nil {
+		logrus.WithError(err).Error("failed to send response to client")
+	}
 }
