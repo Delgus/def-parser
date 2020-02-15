@@ -5,9 +5,7 @@ import (
 	"time"
 )
 
-// RandomTicker is similar to time.Ticker but ticks at random intervals between
-// the min and max duration values (stored internally as int64 nanosecond
-// counts).
+// RandomTicker - тикер co случайным интервалом между min and max значениями
 type RandomTicker struct {
 	C     chan time.Time
 	stopc chan chan struct{}
@@ -15,9 +13,7 @@ type RandomTicker struct {
 	max   int64
 }
 
-// NewRandomTicker returns a pointer to an initialized instance of the
-// RandomTicker. Min and max are durations of the shortest and longest allowed
-// ticks. Ticker will run in a goroutine until explicitly stopped.
+// NewRandomTicker вернет новый RandomTicker
 func NewRandomTicker(min, max time.Duration) *RandomTicker {
 	rt := &RandomTicker{
 		C:     make(chan time.Time),
@@ -29,7 +25,7 @@ func NewRandomTicker(min, max time.Duration) *RandomTicker {
 	return rt
 }
 
-// Stop terminates the ticker goroutine and closes the C channel.
+// Stop останавливает горутину с тикером и закрывает канал C.
 func (rt *RandomTicker) Stop() {
 	c := make(chan struct{})
 	rt.stopc <- c

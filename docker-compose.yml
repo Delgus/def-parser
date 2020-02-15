@@ -4,5 +4,13 @@ services:
     build: .
     ports:
     - 8080:8080
+    environment: 
+    - APP_HOST=                # хост приложения
+    - APP_PORT=8080            # порт приложения
+    - CACHE_EXPIRATION=4h      # время хранения информации о сайте в кэше
+    - CACHE_CLEAN_INTERVAL=2h  # интервал с которым очищать старый кэш
+    - MIN_PARSE_INTERVAL=1s    # минимальный интервал между запросами к WebAdvisor
+    - MAX_PARSE_INTERVAL=5s    # максимальный интервал между запросами к WebAdvisor
+    - PARSE_CLIENT_TIMEOUT=30s # таймаут для клиента парсера, сколько ждать ответа от WebAdvisor
 
 

@@ -25,7 +25,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 # Copy the Pre-built binary file from the previous stage
-COPY --from=builder /app/chatd .
+COPY --from=builder /app/app .
 COPY web web
 
 # Expose port 8080 to the outside world
