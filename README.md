@@ -58,7 +58,7 @@ Response:
     "sites":[
         {
             "host":"delgus.com",
-            "status":"complete", // complete - если уже обработан сайт, progress - если сайт еще в обработке
+            "status":"complete", 
             "safe":"Безопасно",
             "categories":["Технические и деловые форумы"]
         },
@@ -71,6 +71,9 @@ Response:
     ]
 }
 ```
+status:
+ `complete` - если уже обработан сайт,  
+ `progress` - если сайт еще в обработке
 
 ### Event Stream
 Для непрерывной доставки до клиента результата по обработке используются Server Side Events.  
