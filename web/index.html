@@ -52,9 +52,7 @@
                     url: "/api",
                     data: $form.serialize()
                 }).done(function (req) {
-                    console.log(req)
-                    if (req.error) {
-                        alert(req.message);
+                    if (error(req)) {
                         return
                     }
                     $.ajax({
@@ -62,31 +60,33 @@
                         url: "/result",
                         data: { statement_id: req.statement_id },
                     }).done(function (req) {
-                        if (req.error) {
-                            alert(req.message);
+                        if (error(req)) {
                             return
                         }
                         $('form').hide();
                         for (site of req.sites) {
-                            color = "table-active";
                             spinner = "";
                             if (site.status == "progress") {
                                 spinner = '<div class="spinner-border text-warning" role="status"><span class="sr-only">Loading...</span></div>'
                             }
-                            $("tbody").append(`<tr class="${color}">
-                                <td> ${spinner} ${site.host} </td>
-                                <td> ${site.safe} </td>
-                                <td> ${site.categories.join(',')} </td>
+                            $("tbody").append(`<tr id="#${site.host}">
+                                <td id="#${site.host}-host"> ${spinner} ${site.host} </td>
+                                <td id="#${site.host}-safe"> ${site.safe} </td>
+                                <td id="#${site.host}-categories"> ${site.categories.join(',')} </td>
                                 </tr>`)
+                            colorForTR(site.host, site.safe);
                             if (site.status == "progress") {
                                 let eventSource = new EventSource(`/events?stream=${site.host}`);
                                 eventSource.onmessage = function (event) {
-                                    console.log("Новое сообщение", event.data);
+                                    o = JSON.parse(event.data);
+                                    colorForTR(o.host, o.safe);
+                                    $(document.getElementById(`#${site.host}-host`)).html(o.host);
+                                    $(document.getElementById(`#${site.host}-safe`)).html(o.safe);
+                                    $(document.getElementById(`#${site.host}-categories`)).html(o.categories.join(','));
                                 }
                             }
                         }
                         $('#results').show();
-                        console.log(req);
                     }).fail(function () {
                         console.log('fail');
                     });
@@ -94,6 +94,32 @@
                     console.log('fail');
                 });
             });
+
+            function error(req) {
+                if (req.error) {
+                    alert(req.message);
+                    return true;
+                }
+                return false;
+            }
+
+            function colorForTR(host, safe) {
+                tr = $(document.getElementById(`#${host}`));
+                tr.removeClass("table-active");
+                switch (safe) {
+                    case 'Безопасно':
+                        tr.addClass("table-success");
+                        break;
+                    case 'Небольшой Риск':
+                        tr.addClass("table-warning");
+                        break;
+                    case 'Высокий Риск':
+                        tr.addClass("table-danger");
+                        break;
+                    default:
+                        tr.addClass("table-active");
+                }
+            }
         });
     </script>
 </body>

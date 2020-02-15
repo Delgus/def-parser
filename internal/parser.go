@@ -49,6 +49,7 @@ func (p *Parser) getSite(url string) *Site {
 	site, found := p.cache.Get(url)
 	if !found {
 		p.addURL(url)
+		p.notifier.CreateStream(url)
 		return &Site{
 			Host:       url,
 			Status:     progress,
@@ -120,7 +121,6 @@ func (p *Parser) work() {
 		logrus.WithError(err).Errorf(`can not convert site struct %v to json`, site)
 		return
 	}
-	p.notifier.CreateStream(url)
 	p.notifier.Publish(url, &sse.Event{
 		Data: siteBytes,
 	})
