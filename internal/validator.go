@@ -33,7 +33,7 @@ func (v *validator) parseDomain(dirtyURLs string) ([]string, error) {
 		if len(matches) == 0 {
 			continue
 		}
-		domain := matches[0][3]
+		domain := strings.Trim(matches[0][3], `.`)
 		if !found[domain] {
 			urls = append(urls, matches[0][3])
 			found[domain] = true

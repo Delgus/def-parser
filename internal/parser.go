@@ -13,11 +13,14 @@ import (
 )
 
 const (
+	advisorURL = `https://siteadvisor.com/sitereport.html?url=%s`
+
 	safeImg    = `/img/safe-symbol.svg`
 	warningImg = `/img/warning-icon.svg`
 	dangerImg  = `/img/danger-icon.svg`
 )
 
+// получить уровень безопасности исходя из картинки
 func getSafe(img string) string {
 	switch img {
 	case safeImg:
@@ -30,23 +33,29 @@ func getSafe(img string) string {
 	return `Неизвестно`
 }
 
-// Parser is awesome
+// Parser реализует воркер для отправки запросов и обработки ответов
 type Parser struct {
-	ticker   *RandomTicker
-	notifier *sse.Server
-	urls     []string
-	cache    *Cache
-	mu       sync.Mutex
+	clientTimeout time.Duration
+	ticker        *RandomTicker
+	notifier      *sse.Server
+	urls          []string
+	cache         *Cache
+	mu            sync.Mutex
 }
 
+// добавляет хост в очередь для дальнейшей обработки
 func (p *Parser) addURL(url string) {
 	p.mu.Lock()
 	p.urls = append(p.urls, url)
 	p.mu.Unlock()
 }
 
+// получение инфо о сайте
 func (p *Parser) getSite(url string) *Site {
+	// ищем в кэше
 	site, found := p.cache.Get(url)
+
+	// если не найден - отправляем в обработку
 	if !found {
 		p.addURL(url)
 		p.notifier.CreateStream(url)
@@ -59,6 +68,7 @@ func (p *Parser) getSite(url string) *Site {
 	return site
 }
 
+// получаем название хоста для дальнейшей обработки
 func (p *Parser) getURL() (string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -70,12 +80,13 @@ func (p *Parser) getURL() (string, error) {
 	return url, nil
 }
 
-// NewParser is awesome
-func NewParser(notifier *sse.Server, cache *Cache) *Parser {
+// NewParser вернет новый воркер для парсинга результатов
+func NewParser(notifier *sse.Server, cache *Cache, minTick, maxTick, clientTimeout time.Duration) *Parser {
 	p := &Parser{
-		ticker:   NewRandomTicker(1*time.Second, 5*time.Second),
-		notifier: notifier,
-		cache:    cache,
+		clientTimeout: clientTimeout,
+		ticker:        NewRandomTicker(minTick, maxTick),
+		notifier:      notifier,
+		cache:         cache,
 	}
 	go p.run()
 	return p
@@ -88,13 +99,14 @@ func (p *Parser) run() {
 }
 
 func (p *Parser) work() {
+	// получаем хост из очереди для обработки
 	url, err := p.getURL()
 	if err != nil {
 		return
 	}
 
-	// get html from siteadvisor
-	doc, err := getDoc(url)
+	// получаем документ
+	doc, err := p.getDoc(url)
 	if err != nil {
 		logrus.Error(err)
 	}
@@ -126,27 +138,25 @@ func (p *Parser) work() {
 	})
 }
 
-func getDoc(checkURL string) (*goquery.Document, error) {
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+func (p *Parser) getDoc(checkURL string) (*goquery.Document, error) {
+	client := &http.Client{Timeout: p.clientTimeout}
 
-	url := fmt.Sprintf(`https://siteadvisor.com/sitereport.html?url=%s`, checkURL)
-
+	url := fmt.Sprintf(advisorURL, checkURL)
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
-	// russian language optionality
+	// заголовок устанавливающий русский язык для ответа
 	request.Header.Set("Accept-Language", "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3")
+
 	resp, err := client.Do(request)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != 200 {
-		logrus.Errorf("status code error: %d %s", resp.StatusCode, resp.Status)
+		return nil, fmt.Errorf("status code error: %d %s", resp.StatusCode, resp.Status)
 	}
 
 	return goquery.NewDocumentFromReader(resp.Body)
