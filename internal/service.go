@@ -29,7 +29,7 @@ func (s *Service) getSites(statementID int64) ([]*Site, error) {
 	}
 	var response []*Site
 	for _, url := range urls {
-		response = append(response, s.parser.getSite(url))
+		response = append(response, s.parser.getSite(url, statementID))
 	}
 	return response, nil
 }

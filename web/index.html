@@ -55,15 +55,15 @@
                     if (error(req)) {
                         return
                     }
+                    statement_id = req.statement_id
                     $.ajax({
                         type: "POST",
                         url: "/result",
-                        data: { statement_id: req.statement_id },
+                        data: { statement_id: statement_id },
                     }).done(function (req) {
                         if (error(req)) {
                             return
                         }
-                        var srcs = [];
                         $('form').hide();
                         for (site of req.sites) {
                             spinner = "";
@@ -76,18 +76,15 @@
                                 <td id="#${site.host}-categories"> ${site.categories.join(',')} </td>
                                 </tr>`)
                             colorForTR(site.host, site.safe);
-                            if (site.status == "progress") {
-                                eventSource = new EventSource(`/events?stream=${site.host}`);
-                                srcs.push(eventSource);
-                                srcs[srcs.length - 1].onmessage = function (event) {
-                                    o = JSON.parse(event.data);
-                                    colorForTR(o.host, o.safe);
-                                    $(document.getElementById(`#${o.host}-host`)).html(o.host);
-                                    $(document.getElementById(`#${o.host}-safe`)).html(o.safe);
-                                    $(document.getElementById(`#${o.host}-categories`)).html(o.categories.join(','));
-                                };
-                            }
                         }
+                        eventSource = new EventSource(`/events?stream=${statement_id}`);
+                        eventSource.onmessage = function (event) {
+                            o = JSON.parse(event.data);
+                            colorForTR(o.host, o.safe);
+                            $(document.getElementById(`#${o.host}-host`)).html(o.host);
+                            $(document.getElementById(`#${o.host}-safe`)).html(o.safe);
+                            $(document.getElementById(`#${o.host}-categories`)).html(o.categories.join(','));
+                        };
                         $('#results').show();
                     }).fail(function () {
                         console.log('fail');

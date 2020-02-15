@@ -38,27 +38,32 @@ type Parser struct {
 	clientTimeout time.Duration
 	ticker        *RandomTicker
 	notifier      *sse.Server
-	urls          []string
+	urls          []url
 	cache         *Cache
 	mu            sync.Mutex
 }
 
+type url struct {
+	statementID int64
+	host        string
+}
+
 // добавляет хост в очередь для дальнейшей обработки
-func (p *Parser) addURL(url string) {
+func (p *Parser) addURL(host string, id int64) {
 	p.mu.Lock()
-	p.urls = append(p.urls, url)
+	p.urls = append(p.urls, url{host: host, statementID: id})
 	p.mu.Unlock()
 }
 
 // получение инфо о сайте
-func (p *Parser) getSite(url string) *Site {
+func (p *Parser) getSite(url string, id int64) *Site {
 	// ищем в кэше
 	site, found := p.cache.Get(url)
 
 	// если не найден - отправляем в обработку
 	if !found {
-		p.addURL(url)
-		p.notifier.CreateStream(url)
+		p.addURL(url, id)
+		p.notifier.CreateStream(fmt.Sprintf(`%d`, id))
 		return &Site{
 			Host:       url,
 			Status:     progress,
@@ -69,11 +74,11 @@ func (p *Parser) getSite(url string) *Site {
 }
 
 // получаем название хоста для дальнейшей обработки
-func (p *Parser) getURL() (string, error) {
+func (p *Parser) getURL() (url, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.urls) == 0 {
-		return "", fmt.Errorf(`not found url for work`)
+		return url{}, fmt.Errorf(`not found url for work`)
 	}
 	url := p.urls[0]
 	p.urls = p.urls[1:]
@@ -106,7 +111,7 @@ func (p *Parser) work() {
 	}
 
 	// получаем документ
-	doc, err := p.getDoc(url)
+	doc, err := p.getDoc(url.host)
 	if err != nil {
 		logrus.Error(err)
 	}
@@ -114,10 +119,10 @@ func (p *Parser) work() {
 	// Узнаем безопасность сайта
 	img, exist := doc.Find(`.status>img`).Attr("src")
 	if !exist {
-		logrus.Errorf(`unexpected page for url: %s`, url)
+		logrus.Errorf(`unexpected page for url: %s`, url.host)
 		return
 	}
-	site := &Site{Host: url, Safe: getSafe(img)}
+	site := &Site{Host: url.host, Safe: getSafe(img)}
 	// Записываем категории
 	doc.Find(`.content>ul>li`).Each(func(i int, s *goquery.Selection) {
 		site.Categories = append(site.Categories, s.Find(`a`).Text())
@@ -125,7 +130,7 @@ func (p *Parser) work() {
 	site.Status = complete
 
 	// Добавляем в кэш
-	p.cache.Set(url, site)
+	p.cache.Set(url.host, site)
 
 	// Отправляем уведомление клиенту
 	siteBytes, err := json.Marshal(site)
@@ -133,7 +138,7 @@ func (p *Parser) work() {
 		logrus.WithError(err).Errorf(`can not convert site struct %v to json`, site)
 		return
 	}
-	p.notifier.Publish(url, &sse.Event{
+	p.notifier.Publish(fmt.Sprintf(`%d`, url.statementID), &sse.Event{
 		Data: siteBytes,
 	})
 }
