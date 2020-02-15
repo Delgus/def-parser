@@ -22,6 +22,7 @@ func (v *validator) parseDomain(dirtyURLs string) ([]string, error) {
 		return nil, fmt.Errorf(`domains not found`)
 	}
 	var urls []string
+	found := make(map[string]bool)
 	fields := strings.Fields(dirtyURLs)
 	for _, f := range fields {
 		f := strings.TrimSpace(f)
@@ -32,7 +33,11 @@ func (v *validator) parseDomain(dirtyURLs string) ([]string, error) {
 		if len(matches) == 0 {
 			continue
 		}
-		urls = append(urls, matches[0][3])
+		domain := matches[0][3]
+		if !found[domain] {
+			urls = append(urls, matches[0][3])
+			found[domain] = true
+		}
 	}
 	if len(urls) == 0 {
 		return nil, fmt.Errorf(`domains not found`)
