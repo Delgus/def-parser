@@ -19,15 +19,14 @@ type Site struct {
 
 // HostTask - структура для проверки сайта
 type HostTask struct {
-	StatementID int64
+	StatementID int
 	Host        string
 }
 
 // StoreInterface интерфейс хранилища заявок
 type StoreInterface interface {
-	GetNewID() (int64, error)
-	SaveStatement(int64, []string) error
-	GetStatementURLs(int64) ([]string, error)
+	SaveStatement([]string) (int, error)
+	GetStatementURLs(int) ([]string, error)
 }
 
 // CacheInterface интерфейс кэша для инфо о безопасности сайтов

@@ -30,17 +30,6 @@ func NewAPI(service *Service) *API {
 
 // Start обрабатывает поступившую заявку и возвращает ее ID
 func (a *API) Start(w http.ResponseWriter, r *http.Request) {
-	// id заявки
-	id, err := a.service.getStatementID()
-	if err != nil {
-		logrus.WithError(err).Error("failed get new id for statement")
-		writeResponse(w, ErrorResponse{
-			Error:   "internal",
-			Message: "internal error",
-		})
-		return
-	}
-
 	// парсим полученные названия доменов
 	urls := r.FormValue("urls")
 	domains, err := a.validator.parseDomain(r.FormValue("urls"))
@@ -54,8 +43,9 @@ func (a *API) Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// сохраняем заявку
-	if err := a.service.addStatement(id, domains); err != nil {
-		logrus.WithError(err).Errorf("failed save statement id: %d urls: %v", id, urls)
+	id, err := a.service.addStatement(domains)
+	if err != nil {
+		logrus.WithError(err).Errorf("failed save statement urls: %v", domains)
 		writeResponse(w, ErrorResponse{
 			Error:   "internal",
 			Message: "failed save statement",
@@ -64,7 +54,7 @@ func (a *API) Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeResponse(w, struct {
-		StatemenID int64 `json:"statement_id"`
+		StatemenID int `json:"statement_id"`
 	}{StatemenID: id})
 }
 
@@ -73,7 +63,7 @@ func (a *API) Sites(w http.ResponseWriter, r *http.Request) {
 	// получаем id заявки
 	id, err := a.validator.parseID(r.FormValue("statement_id"))
 	if err != nil {
-		logrus.WithError(err).Errorf(`incorrect int64 statement_id %v`, id)
+		logrus.WithError(err).Errorf(`incorrect int statement_id %v`, id)
 		writeResponse(w, ErrorResponse{
 			Error:   "bad request",
 			Message: "bad statement_id",

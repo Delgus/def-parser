@@ -24,15 +24,11 @@ func NewService(store app.StoreInterface, cache app.CacheInterface, queue app.Qu
 	}
 }
 
-func (s *Service) getStatementID() (int64, error) {
-	return s.store.GetNewID()
+func (s *Service) addStatement(domains []string) (int, error) {
+	return s.store.SaveStatement(domains)
 }
 
-func (s *Service) addStatement(statementID int64, domains []string) error {
-	return s.store.SaveStatement(statementID, domains)
-}
-
-func (s *Service) getSites(statementID int64) ([]*app.Site, error) {
+func (s *Service) getSites(statementID int) ([]*app.Site, error) {
 	urls, err := s.store.GetStatementURLs(statementID)
 	if err != nil {
 		return nil, err
@@ -45,7 +41,7 @@ func (s *Service) getSites(statementID int64) ([]*app.Site, error) {
 		if !found {
 			s.queue.Add(app.HostTask{Host: url, StatementID: statementID})
 			// создаем соединение с клиентом
-			s.notifier.CreateStream(strconv.FormatInt(statementID, 10))
+			s.notifier.CreateStream(strconv.Itoa(statementID))
 			site = &app.Site{
 				Host:       url,
 				Status:     app.Progress,

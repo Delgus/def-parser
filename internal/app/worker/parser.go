@@ -64,7 +64,7 @@ func (p *Parser) getTask() (app.HostTask, error) {
 	// если так то отправляем клиенту инфо и переходим к следующему сайту в очереди
 	site, found := p.cache.Get(task.Host)
 	if found {
-		err := p.notifier.Publish(strconv.FormatInt(task.StatementID, 10), site)
+		err := p.notifier.Publish(strconv.Itoa(task.StatementID), site)
 		if err != nil {
 			logrus.WithError(err).Errorf(`can not publish message to channel %d`, task.StatementID)
 		}
@@ -114,7 +114,7 @@ func (p *Parser) work() {
 	p.cache.Set(task.Host, site)
 
 	// Отправляем уведомление клиенту
-	if err := p.notifier.Publish(strconv.FormatInt(task.StatementID, 10), site); err != nil {
+	if err := p.notifier.Publish(strconv.Itoa(task.StatementID), site); err != nil {
 		logrus.WithError(err).Errorf(`error by publish message in stream %d`, task.StatementID)
 	}
 }

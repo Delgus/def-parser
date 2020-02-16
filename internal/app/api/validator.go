@@ -45,11 +45,11 @@ func (v *validator) parseDomain(dirtyURLs string) ([]string, error) {
 	return urls, nil
 }
 
-func (v *validator) parseID(dirtyID string) (int64, error) {
+func (v *validator) parseID(dirtyID string) (int, error) {
 	if dirtyID == "" {
 		return 0, fmt.Errorf(`id is required`)
 	}
-	id, err := strconv.ParseInt(dirtyID, 10, 64)
+	id, err := strconv.Atoi(dirtyID)
 	if err != nil {
 		return 0, err
 	}
