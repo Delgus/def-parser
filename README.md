@@ -77,9 +77,9 @@ status:
 
 ### Event Stream
 Для непрерывной доставки до клиента результата по обработке используются Server Side Events.  
-Необходимо подписаться на ресурс `events?stream={statement_id}`  
+Необходимо подписаться на ресурс `/events/{statement_id}`  
 ```js
-  eventSource = new EventSource(`/events?stream=2`);
+  eventSource = new EventSource(`/events/2`);
   eventSource.onmessage = function (event) {
       // update page
   }
