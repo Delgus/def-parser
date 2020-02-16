@@ -1,12 +1,14 @@
-package app
+package worker
 
 import (
 	"fmt"
+	"io"
 	"net/http"
-	"sync"
+	"strconv"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/delgus/def-parser/internal/app"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,100 +37,61 @@ func getSafe(img string) string {
 type Parser struct {
 	clientTimeout time.Duration
 	ticker        *RandomTicker
-	notifier      NotifierInterface
-	urls          []url
-	cache         CacheInterface
-	mu            sync.Mutex
-}
-
-type url struct {
-	statementID int64
-	host        string
-}
-
-// добавляет хост в очередь для дальнейшей обработки
-func (p *Parser) addURL(host string, id int64) {
-	p.mu.Lock()
-	p.urls = append(p.urls, url{host: host, statementID: id})
-	p.mu.Unlock()
-}
-
-// получение инфо о сайте
-func (p *Parser) getSite(url string, id int64) *Site {
-	// ищем в кэше
-	site, found := p.cache.Get(url)
-
-	// если не найден - отправляем в обработку
-	if !found {
-		p.addURL(url, id)
-		p.notifier.CreateStream(fmt.Sprintf(`%d`, id))
-		return &Site{
-			Host:       url,
-			Status:     progress,
-			Categories: []string{},
-		}
-	}
-	return site
-}
-
-func (p *Parser) getURLWithLock() (url, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if len(p.urls) == 0 {
-		return url{}, fmt.Errorf(`not found url for work`)
-	}
-	u := p.urls[0]
-	p.urls = p.urls[1:]
-	return u, nil
-}
-
-// получаем название хоста для дальнейшей обработки
-func (p *Parser) getURL() (url, error) {
-	u, err := p.getURLWithLock()
-	if err != nil {
-		return u, err
-	}
-	// проверяем кэш вдруг этот сайт уже был обработан
-	// если так то отправляем клиенту инфо и переходим к следующему сайту в очереди
-	site, found := p.cache.Get(u.host)
-	if found {
-		err := p.notifier.Publish(fmt.Sprintf(`%d`, u.statementID), site)
-		if err != nil {
-			logrus.WithError(err).Errorf(`can not publish message to channel %d`, u.statementID)
-		}
-		return p.getURL()
-	}
-
-	return u, nil
+	notifier      app.NotifierInterface
+	queue         app.QueueInterface
+	cache         app.CacheInterface
 }
 
 // NewParser вернет новый воркер для парсинга результатов
-func NewParser(notifier NotifierInterface, cache CacheInterface, minTick, maxTick, clientTimeout time.Duration) *Parser {
-	p := &Parser{
+func NewParser(notifier app.NotifierInterface, cache app.CacheInterface, queue app.QueueInterface,
+	minTick, maxTick, clientTimeout time.Duration) *Parser {
+	return &Parser{
 		clientTimeout: clientTimeout,
 		ticker:        NewRandomTicker(minTick, maxTick),
 		notifier:      notifier,
 		cache:         cache,
+		queue:         queue,
 	}
-	go p.run()
-	return p
 }
 
-func (p *Parser) run() {
+// получаем название хоста для дальнейшей обработки
+func (p *Parser) getTask() (app.HostTask, error) {
+	task, err := p.queue.Get()
+	if err != nil {
+		return task, err
+	}
+	// проверяем кэш вдруг этот сайт уже был обработан
+	// если так то отправляем клиенту инфо и переходим к следующему сайту в очереди
+	site, found := p.cache.Get(task.Host)
+	if found {
+		err := p.notifier.Publish(strconv.FormatInt(task.StatementID, 10), site)
+		if err != nil {
+			logrus.WithError(err).Errorf(`can not publish message to channel %d`, task.StatementID)
+		}
+		return p.getTask()
+	}
+
+	return task, nil
+}
+
+// Run - запуск парсера
+func (p *Parser) Run() {
 	for range p.ticker.C {
 		go p.work()
 	}
 }
 
 func (p *Parser) work() {
-	// получаем хост из очереди для обработки
-	url, err := p.getURL()
+	task, err := p.getTask()
 	if err != nil {
+		if err != io.EOF {
+			logrus.WithError(err).Error(`can not get task for work`)
+		}
 		return
 	}
 
 	// получаем документ
-	doc, err := p.getDoc(url.host)
+	doc, err := p.getDoc(task.Host)
 	if err != nil {
 		logrus.WithError(err).Error(`can not get site info from web advisor`)
 		return
@@ -137,22 +100,22 @@ func (p *Parser) work() {
 	// Узнаем безопасность сайта
 	img, exist := doc.Find(`.status>img`).Attr("src")
 	if !exist {
-		logrus.Errorf(`unexpected page for url: %s`, url.host)
+		logrus.Errorf(`unexpected page for url: %s`, task.Host)
 		return
 	}
-	site := &Site{Host: url.host, Safe: getSafe(img)}
+	site := &app.Site{Host: task.Host, Safe: getSafe(img)}
 	// Записываем категории
 	doc.Find(`.content>ul>li`).Each(func(i int, s *goquery.Selection) {
 		site.Categories = append(site.Categories, s.Find(`a`).Text())
 	})
-	site.Status = complete
+	site.Status = app.Complete
 
 	// Добавляем в кэш
-	p.cache.Set(url.host, site)
+	p.cache.Set(task.Host, site)
 
 	// Отправляем уведомление клиенту
-	if err := p.notifier.Publish(fmt.Sprintf(`%d`, url.statementID), site); err != nil {
-		logrus.WithError(err).Errorf(`error by publish message in stream %d`, url.statementID)
+	if err := p.notifier.Publish(strconv.FormatInt(task.StatementID, 10), site); err != nil {
+		logrus.WithError(err).Errorf(`error by publish message in stream %d`, task.StatementID)
 	}
 }
 

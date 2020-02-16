@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/delgus/def-parser/internal/app"
+	"github.com/delgus/def-parser/internal/app/api"
+	"github.com/delgus/def-parser/internal/app/worker"
 	cachemem "github.com/delgus/def-parser/internal/infrastructure/cache/memory"
 	"github.com/delgus/def-parser/internal/infrastructure/notify/sse"
+	queue "github.com/delgus/def-parser/internal/infrastructure/queue/memory"
 	"github.com/delgus/def-parser/internal/infrastructure/store/memory"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
@@ -39,19 +41,22 @@ func main() {
 	// cache - хранит инфо о хостах и их безопасности
 	cache := cachemem.NewCache(cfg.CacheExpiration, cfg.CacheCleanInterval)
 
-	// parser - воркер который с определенной периодичностью отправляет запросы на siteadvisor
-	parser := app.NewParser(notifier, cache, cfg.MinParseInterval, cfg.MaxParseInterval, cfg.ParseClientTimeout)
+	que := queue.NewQueue()
 
-	service := app.NewService(store, parser)
-
-	api := app.NewAPI(service)
+	// api
+	service := api.NewService(store, cache, que, notifier)
+	apiHandler := api.NewAPI(service)
 
 	// web client
 	http.Handle("/", http.FileServer(http.Dir("web")))
 
 	// api
-	http.HandleFunc("/api", api.Start)
-	http.HandleFunc("/result", api.Sites)
+	http.HandleFunc("/api", apiHandler.Start)
+	http.HandleFunc("/result", apiHandler.Sites)
+
+	// parser
+	parser := worker.NewParser(notifier, cache, que, cfg.MinParseInterval, cfg.MaxParseInterval, cfg.ParseClientTimeout)
+	go parser.Run()
 
 	logrus.Fatal(http.ListenAndServe(fmt.Sprintf(`%s:%d`, cfg.Host, cfg.Port), nil))
 }

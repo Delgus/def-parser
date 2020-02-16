@@ -1,9 +1,10 @@
-package app
+package api
 
 import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/delgus/def-parser/internal/app"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,21 +19,6 @@ type ErrorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message"`
 }
-
-// Site хранит информацию о сайте
-type Site struct {
-	Host       string   `json:"host"`
-	Status     status   `json:"status"`
-	Safe       string   `json:"safe"`       // Безопасность сайта
-	Categories []string `json:"categories"` // Категории
-}
-
-type status string
-
-const (
-	progress status = "progress"
-	complete status = "complete"
-)
 
 // NewAPI конструктор нового API
 func NewAPI(service *Service) *API {
@@ -107,7 +93,7 @@ func (a *API) Sites(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeResponse(w, struct {
-		Sites []*Site `json:"sites"`
+		Sites []*app.Site `json:"sites"`
 	}{Sites: sites})
 }
 

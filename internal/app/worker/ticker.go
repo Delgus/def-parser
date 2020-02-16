@@ -1,4 +1,4 @@
-package app
+package worker
 
 import (
 	"math/rand"
