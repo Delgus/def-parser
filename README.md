@@ -103,3 +103,16 @@ status:
 
 SPA на jquery.
 Не бейте меня ногами, я больше backend, чем front)))
+
+
+### О производительности
+Архитектурно заложена возможность горизонтально масштабироваться.  
+Сейчас схематично архитектура выглядит вот так 
+
+![screenshot](https://delgus.github.io/img/schema1.jpg)
+
+Но она легко преобразуется в 
+
+![screenshot](https://delgus.github.io/img/schema2.jpg)
+
+Всего лишь необходимо реализовать интерфейс `QueueInterface` для работы с RabbitMQ, `StoreInterface` для работы с MySQL, `CacheInterface` - для работы с Redis и возможно придется реализовывать свой `NotifyInterface` для оповещения клиентов
