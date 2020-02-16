@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/delgus/def-parser/internal"
-	"github.com/delgus/def-parser/store/memory"
+	"github.com/delgus/def-parser/internal/app"
+	cachemem "github.com/delgus/def-parser/internal/infrastructure/cache/memory"
+	"github.com/delgus/def-parser/internal/infrastructure/store/memory"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/r3labs/sse"
 	"github.com/sirupsen/logrus"
@@ -35,14 +36,14 @@ func main() {
 	notifier := sse.New()
 
 	// cache - хранит инфо о хостах и их безопасности
-	cache := internal.NewCache(cfg.CacheExpiration, cfg.CacheCleanInterval)
+	cache := cachemem.NewCache(cfg.CacheExpiration, cfg.CacheCleanInterval)
 
 	// parser - воркер который с определенной периодичностью отправляет запросы на siteadvisor
-	parser := internal.NewParser(notifier, cache, cfg.MinParseInterval, cfg.MaxParseInterval, cfg.ParseClientTimeout)
+	parser := app.NewParser(notifier, cache, cfg.MinParseInterval, cfg.MaxParseInterval, cfg.ParseClientTimeout)
 
-	service := internal.NewService(store, parser)
+	service := app.NewService(store, parser)
 
-	api := internal.NewAPI(service)
+	api := app.NewAPI(service)
 
 	// web client
 	http.Handle("/", http.FileServer(http.Dir("web")))

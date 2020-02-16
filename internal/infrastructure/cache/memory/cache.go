@@ -1,10 +1,11 @@
-package internal
+package memory
 
 import (
 	"errors"
 	"sync"
-
 	"time"
+
+	"github.com/delgus/def-parser/internal/app"
 )
 
 // Cache struct cache
@@ -17,7 +18,7 @@ type Cache struct {
 
 // Item struct cache item
 type Item struct {
-	Value      *Site
+	Value      *app.Site
 	Expiration int64
 	Created    time.Time
 }
@@ -35,7 +36,7 @@ func NewCache(defaultExpiration, cleanupInterval time.Duration) *Cache {
 }
 
 // Set setting a cache by key
-func (c *Cache) Set(key string, value *Site) {
+func (c *Cache) Set(key string, value *app.Site) {
 	expiration := time.Now().Add(c.defaultExpiration).UnixNano()
 	c.Lock()
 	defer c.Unlock()
@@ -47,7 +48,7 @@ func (c *Cache) Set(key string, value *Site) {
 }
 
 // Get getting a cache by key
-func (c *Cache) Get(key string) (*Site, bool) {
+func (c *Cache) Get(key string) (*app.Site, bool) {
 	c.RLock()
 	defer c.RUnlock()
 	item, found := c.items[key]
