@@ -17,7 +17,12 @@ type Notifier struct {
 
 // NewNotifier вернет *Notifier
 func NewNotifier(route string) *Notifier {
-	n := &Notifier{route: route, server: sse.NewServer(nil)}
+	n := &Notifier{route: route, server: sse.NewServer(&sse.Options{
+		// Increase default retry interval to 10s.
+		RetryInterval: 10 * 1000,
+		// Print debug info
+		Logger: nil,
+	})}
 	http.Handle(n.route, n.server)
 	return n
 }
