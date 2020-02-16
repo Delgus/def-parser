@@ -7,9 +7,9 @@ import (
 
 	"github.com/delgus/def-parser/internal/app"
 	cachemem "github.com/delgus/def-parser/internal/infrastructure/cache/memory"
+	"github.com/delgus/def-parser/internal/infrastructure/notify/sse"
 	"github.com/delgus/def-parser/internal/infrastructure/store/memory"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/r3labs/sse"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,7 +33,8 @@ func main() {
 	store := memory.NewMemoryStore()
 
 	// notifier - оповещает клиента. использованы Server Side Events
-	notifier := sse.New()
+	notifier := sse.NewNotifier("/events/")
+	defer notifier.Shutdown()
 
 	// cache - хранит инфо о хостах и их безопасности
 	cache := cachemem.NewCache(cfg.CacheExpiration, cfg.CacheCleanInterval)
@@ -51,9 +52,6 @@ func main() {
 	// api
 	http.HandleFunc("/api", api.Start)
 	http.HandleFunc("/result", api.Sites)
-
-	// sse notify handler
-	http.HandleFunc("/events", notifier.HTTPHandler)
 
 	logrus.Fatal(http.ListenAndServe(fmt.Sprintf(`%s:%d`, cfg.Host, cfg.Port), nil))
 }

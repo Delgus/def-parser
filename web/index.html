@@ -77,7 +77,7 @@
                                 </tr>`)
                             colorForTR(site.host, site.safe);
                         }
-                        eventSource = new EventSource(`/events?stream=${statement_id}`);
+                        eventSource = new EventSource(`/events/${statement_id}`);
                         eventSource.onmessage = function (event) {
                             o = JSON.parse(event.data);
                             colorForTR(o.host, o.safe);

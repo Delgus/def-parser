@@ -1,14 +1,12 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/r3labs/sse"
 	"github.com/sirupsen/logrus"
 )
 
@@ -37,7 +35,7 @@ func getSafe(img string) string {
 type Parser struct {
 	clientTimeout time.Duration
 	ticker        *RandomTicker
-	notifier      *sse.Server
+	notifier      NotifierInterface
 	urls          []url
 	cache         CacheInterface
 	mu            sync.Mutex
@@ -86,7 +84,7 @@ func (p *Parser) getURL() (url, error) {
 }
 
 // NewParser вернет новый воркер для парсинга результатов
-func NewParser(notifier *sse.Server, cache CacheInterface, minTick, maxTick, clientTimeout time.Duration) *Parser {
+func NewParser(notifier NotifierInterface, cache CacheInterface, minTick, maxTick, clientTimeout time.Duration) *Parser {
 	p := &Parser{
 		clientTimeout: clientTimeout,
 		ticker:        NewRandomTicker(minTick, maxTick),
@@ -133,14 +131,9 @@ func (p *Parser) work() {
 	p.cache.Set(url.host, site)
 
 	// Отправляем уведомление клиенту
-	siteBytes, err := json.Marshal(site)
-	if err != nil {
-		logrus.WithError(err).Errorf(`can not convert site struct %v to json`, site)
-		return
+	if err := p.notifier.Publish(fmt.Sprintf(`%d`, url.statementID), site); err != nil {
+		logrus.WithError(err).Errorf(`error by publish message in stream %d`, url.statementID)
 	}
-	p.notifier.Publish(fmt.Sprintf(`%d`, url.statementID), &sse.Event{
-		Data: siteBytes,
-	})
 }
 
 func (p *Parser) getDoc(checkURL string) (*goquery.Document, error) {
