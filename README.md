@@ -1,6 +1,7 @@
 # Парсер WebAdvisor
 
 Серверная часть написана на go 1.13
+Хранение и кэширование данных реализовано в памяти приложения.
 
 Клиентская часть находится в папке web, одностраничник, написана на HTML5 + Bootstrap + Jquery, отдается сервером golang, но отделить ее небольшая проблема.
 
@@ -18,6 +19,10 @@ docker-compose up --build
 make build
 ./app
 ```
+
+### DEMO
+
+[DEMO](http://demo.delgus.com)
 
 ### Переменные окружения
 ```env
@@ -77,9 +82,9 @@ status:
 
 ### Event Stream
 Для непрерывной доставки до клиента результата по обработке используются Server Side Events.  
-Необходимо подписаться на ресурс `events?stream={statement_id}`  
+Необходимо подписаться на ресурс `/events/{statement_id}`  
 ```js
-  eventSource = new EventSource(`/events?stream=2`);
+  eventSource = new EventSource(`/events/2`);
   eventSource.onmessage = function (event) {
       // update page
   }
