@@ -71,16 +71,35 @@ func (p *Parser) getSite(url string, id int64) *Site {
 	return site
 }
 
-// получаем название хоста для дальнейшей обработки
-func (p *Parser) getURL() (url, error) {
+func (p *Parser) getURLWithLock() (url, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.urls) == 0 {
 		return url{}, fmt.Errorf(`not found url for work`)
 	}
-	url := p.urls[0]
+	u := p.urls[0]
 	p.urls = p.urls[1:]
-	return url, nil
+	return u, nil
+}
+
+// получаем название хоста для дальнейшей обработки
+func (p *Parser) getURL() (url, error) {
+	u, err := p.getURLWithLock()
+	if err != nil {
+		return u, err
+	}
+	// проверяем кэш вдруг этот сайт уже был обработан
+	// если так то отправляем клиенту инфо и переходим к следующему сайту в очереди
+	site, found := p.cache.Get(u.host)
+	if found {
+		err := p.notifier.Publish(fmt.Sprintf(`%d`, u.statementID), site)
+		if err != nil {
+			logrus.WithError(err).Errorf(`can not publish message to channel %d`, u.statementID)
+		}
+		return p.getURL()
+	}
+
+	return u, nil
 }
 
 // NewParser вернет новый воркер для парсинга результатов
@@ -111,7 +130,8 @@ func (p *Parser) work() {
 	// получаем документ
 	doc, err := p.getDoc(url.host)
 	if err != nil {
-		logrus.Error(err)
+		logrus.WithError(err).Error(`can not get site info from web advisor`)
+		return
 	}
 
 	// Узнаем безопасность сайта
