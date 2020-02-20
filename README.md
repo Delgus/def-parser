@@ -20,10 +20,6 @@ make build
 ./app
 ```
 
-### DEMO
-
-[DEMO](http://demo.delgus.com)
-
 ### Переменные окружения
 ```env
 APP_HOST=                 # хост сервера
